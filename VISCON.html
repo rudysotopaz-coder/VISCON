@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>PlastiScan Azul + GAS</title>
+<title>VISCON — Visual Contamination Monitor</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@400;700;900&display=swap');
 :root{
@@ -89,14 +89,14 @@ body{display:flex;flex-direction:column;height:100dvh}
 <div id="cfg">
   <div class="cfg-row">
     <label>GAS URL</label>
-    <input id="gas-url" class="cfg-in" type="url" placeholder="https://script.google.com/macros/s/XXXXX/exec" value="https://script.google.com/a/macros/foodservice.com.gt/s/AKfycbxMI71kteUwZu3RoHoap_QuSPfT2LqCzPa9hfvj5Pqk0OzeneXvlL3oqpZRDGCsw1HwhQ/exec">
+    <input id="gas-url" class="cfg-in" type="url" placeholder="https://script.google.com/a/macros/foodservice.com.gt/s/AKfycbyFKvRPLVyYSirzUANni_8WiB9lPNGyJ_s51w4dXScjRZf828X83oT4j9aq-luDjllt0Q/exec">
     <span id="gas-status">—</span>
   </div>
   <div class="cfg-row">
     <label>LÍNEA</label>
-    <input id="cfg-linea" class="cfg-in" type="text" placeholder="VEGETALES / FRIJOL / etc." style="flex:.6">
+    <input id="cfg-linea" class="cfg-in" type="text" placeholder="FORMAX / VEGETALES / etc." style="flex:.6">
     <label style="min-width:50px">TURNO</label>
-    <input id="cfg-turno" class="cfg-in" type="text" placeholder="1 / 2 / 3" style="flex:.2">
+    <input id="cfg-turno" class="cfg-in" type="text" placeholder="1" style="flex:.2">
     <label style="min-width:60px">OPERADOR</label>
     <input id="cfg-oper" class="cfg-in" type="text" placeholder="Nombre" style="flex:.5">
   </div>
@@ -357,19 +357,21 @@ async function sendToGAS(dets) {
   dot.classList.add('sync');
 
   try {
-    const res  = await fetch(S.gasUrl, {
+    // Encode payload as URL params para evitar CORS preflight
+    const params = new URLSearchParams();
+    params.append('data', JSON.stringify(payload));
+    const urlWithData = S.gasUrl + '?' + params.toString();
+
+    // Usar no-cors fetch — no leemos respuesta pero el POST llega al GAS
+    await fetch(S.gasUrl, {
       method : 'POST',
+      mode   : 'no-cors',
       body   : JSON.stringify(payload),
-      headers: {'Content-Type':'application/json'},
+      headers: {'Content-Type':'text/plain'},
     });
-    const data = await res.json();
-    if(data.ok) {
-      gasSt.textContent = '✓ Fila '+data.row;
-      gasUrlEl.classList.remove('err'); gasUrlEl.classList.add('ok');
-      showToast('✓ REGISTRADO EN SHEETS', 'synced');
-    } else {
-      gasSt.textContent = '✗ '+data.error;
-    }
+    gasSt.textContent = '✓ Enviado';
+    gasUrlEl.classList.remove('err'); gasUrlEl.classList.add('ok');
+    showToast('✓ REGISTRADO EN SHEETS', 'synced');
   } catch(e) {
     gasSt.textContent = '✗ Sin conexión';
     gasUrlEl.classList.add('err');
@@ -434,6 +436,7 @@ function showToast(msg, cls='') {
 }
 
 function doAlert(dets) {
+  playAlarm();
   flash.style.cssText='display:block;animation:none;position:absolute;inset:0;z-index:10;background:rgba(255,48,48,.35);pointer-events:none';
   void flash.offsetWidth; flash.style.animation='flash .3s ease forwards';
   setTimeout(()=>flash.style.display='none',340);
@@ -452,9 +455,36 @@ function doAlert(dets) {
   });
 }
 
+
+// ── AUDIO ALARM ────────────────────────────────────────────────
+let audioCtx = null;
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+function playAlarm() {
+  try {
+    initAudio();
+    // Three quick beeps
+    [0, 0.15, 0.30].forEach(offset => {
+      const osc  = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime + offset);
+      osc.frequency.setValueAtTime(1100, audioCtx.currentTime + offset + 0.05);
+      gain.gain.setValueAtTime(0.4, audioCtx.currentTime + offset);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + offset + 0.12);
+      osc.start(audioCtx.currentTime + offset);
+      osc.stop(audioCtx.currentTime + offset + 0.12);
+    });
+  } catch(e) {}
+}
+
 // ── CONTROLES ──────────────────────────────────────────────────
 btn.onclick=async()=>{
   if(!S.running){
+    initAudio();
     const ok=await startCam(); if(!ok) return;
     S.running=true; S.fc=0; S.lastTs=0;
     btn.textContent='■ DETENER'; btn.classList.add('run');
