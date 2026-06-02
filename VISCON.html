@@ -102,7 +102,7 @@ body{display:flex;flex-direction:column;height:100dvh}
   </div>
   <div class="cfg-row">
     <label>BANDA (mm)</label>
-    <input id="cal-in" class="cfg-in" type="number" value="200" min="50" max="600" style="flex:.3">
+    <input id="cal-in" class="cfg-in" type="number" value="1250" min="50" max="600" style="flex:.3">
     <label style="min-width:70px">FOTO EN LOG</label>
     <input id="cfg-foto" type="checkbox" checked style="width:18px;height:18px;accent-color:var(--blue)">
     <span style="font-size:.6rem;color:var(--dim);margin-left:4px">Captura frame al detectar</span>
@@ -134,8 +134,8 @@ body{display:flex;flex-direction:column;height:100dvh}
 
 <div id="sens-row">
   <label>SENSIBILIDAD</label>
-  <input type="range" id="sens-sl" min="1" max="10" value="5">
-  <span id="sens-v">5</span>
+  <input type="range" id="sens-sl" min="1" max="10" value="7">
+  <span id="sens-v">7</span>
 </div>
 
 <div id="controls">
@@ -150,7 +150,7 @@ body{display:flex;flex-direction:column;height:100dvh}
 const S = {
   running:false, stream:null, animId:null,
   total:0, maxMM:0, fps:0, lastTs:0,
-  sens:5, bandwidth:200, toastT:null, fc:0,
+  sens:7, bandwidth:1250, toastT:null, fc:0,
   gasUrl:'', syncing:false, pendingQueue:[],
   // Debounce: no enviar a GAS más de 1 vez cada N ms
   GAS_DEBOUNCE: 8000,
@@ -248,22 +248,84 @@ function analyze() {
   const id   = ctx.getImageData(roi.x, roi.y, roi.w, roi.h);
   const data = id.data;
 
-  const bAdvR = 85-(S.sens*7);
-  const bAdvG = 30-(S.sens*2);
-  const bMin  = 60;
+  // Umbrales adaptativos según fondo
+  // Fondo claro (blanco/bandeja): necesita B más dominante
+  // Fondo oscuro (carne): menos exigente
+  const bAdvR = 80-(S.sens*7);   // sens=7 → B>R+31
+  const bAdvG = 25-(S.sens*2);   // sens=7 → B>G+11
+  const bMin  = 70;              // mínimo absoluto de azul
+  const rMax  = 160;             // excluir blancos puros (R muy alto = blanco, no azul)
   const bin   = new Uint8Array(roi.w*roi.h);
 
   for (let i=0; i<roi.w*roi.h; i++) {
     const r=data[i*4], g=data[i*4+1], b=data[i*4+2];
-    if (b>bMin && b>r+bAdvR && b>g+bAdvG) bin[i]=1;
+    // Excluir blanco puro y reflexiones especulares
+    const isWhite = r>200 && g>200 && b>200;
+    if (!isWhite && b>bMin && b>r+bAdvR && b>g+bAdvG) bin[i]=1;
   }
 
   const blobs = connectedBlobs(bin, roi.w, roi.h);
   const minPx = areaForMM(0.5), maxPx = areaForMM(6.0);
   const valid = blobs.filter(b=>b.size>=minPx && b.size<=maxPx*4);
 
+  // Anti-doble conteo: tracking por posición
+  const newDets = trackParticles(valid, roi);
+
   drawDetections(valid, roi);
-  return valid;
+  return newDets;
+}
+
+// ── PARTICLE TRACKING ──────────────────────────────────────────
+// Calibrado: banda 1250mm, velocidad ~178mm/s, cámara 40cm altura
+// A 30fps: partícula se mueve ~6mm/frame = ~4px en canvas 640px
+const TRACK = {
+  radius  : 35,    // px — zona de búsqueda entre frames
+  timeout : 300,   // ms — tiempo máximo sin ver la partícula
+  sizeTol : 0.5,   // 50% tolerancia de tamaño
+  tracks  : [],    // [ {id, cx, cy, size, lastSeen, counted} ]
+  nextId  : 1,
+};
+
+function trackParticles(blobs, roi) {
+  const now     = Date.now();
+  const newCount = [];
+
+  // Limpiar tracks viejos
+  TRACK.tracks = TRACK.tracks.filter(t => now - t.lastSeen < TRACK.timeout);
+
+  for (const b of blobs) {
+    // Coordenadas absolutas
+    const ax = b.cx + roi.x;
+    const ay = b.cy + roi.y;
+
+    // Buscar track existente cercano con tamaño similar
+    let matched = null;
+    let bestDist = Infinity;
+    for (const t of TRACK.tracks) {
+      const dx   = ax - t.cx;
+      const dy   = ay - t.cy;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const sizeDiff = Math.abs(b.size - t.size) / Math.max(b.size, t.size);
+      if (dist < TRACK.radius && sizeDiff < TRACK.sizeTol && dist < bestDist) {
+        bestDist = dist;
+        matched  = t;
+      }
+    }
+
+    if (matched) {
+      // Actualizar track existente — NO contar de nuevo
+      matched.cx       = ax;
+      matched.cy       = ay;
+      matched.size     = b.size;
+      matched.lastSeen = now;
+    } else {
+      // Nueva partícula — crear track y contar
+      TRACK.tracks.push({ id: TRACK.nextId++, cx: ax, cy: ay, size: b.size, lastSeen: now, counted: true });
+      newCount.push(b);
+    }
+  }
+
+  return newCount; // Solo retorna partículas nuevas (no ya trackeadas)
 }
 
 function connectedBlobs(map, w, h) {
