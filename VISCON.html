@@ -89,7 +89,7 @@ body{display:flex;flex-direction:column;height:100dvh}
 <div id="cfg">
   <div class="cfg-row">
     <label>GAS URL</label>
-    <input id="gas-url" class="cfg-in" type="url" placeholder="https://script.google.com/a/macros/foodservice.com.gt/s/AKfycbyFKvRPLVyYSirzUANni_8WiB9lPNGyJ_s51w4dXScjRZf828X83oT4j9aq-luDjllt0Q/exec">
+    <input id="gas-url" class="cfg-in" type="url" placeholder="https://script.google.com/macros/s/XXXXX/exec" value="https://script.google.com/a/macros/foodservice.com.gt/s/AKfycbyFKvRPLVyYSirzUANni_8WiB9lPNGyJ_s51w4dXScjRZf828X83oT4j9aq-luDjllt0Q/exec">
     <span id="gas-status">—</span>
   </div>
   <div class="cfg-row">
@@ -513,7 +513,7 @@ loadCfg();
 
 // Si no hay config guardada, pre-cargar URL hardcoded
 if (!S.gasUrl) {
-  const hardUrl = 'https://script.google.com/a/macros/foodservice.com.gt/s/AKfycbxMI71kteUwZu3RoHoap_QuSPfT2LqCzPa9hfvj5Pqk0OzeneXvlL3oqpZRDGCsw1HwhQ/exec';
+  const hardUrl = 'https://script.google.com/a/macros/foodservice.com.gt/s/AKfycbyFKvRPLVyYSirzUANni_8WiB9lPNGyJ_s51w4dXScjRZf828X83oT4j9aq-luDjllt0Q/exec';
   gasUrlEl.value = hardUrl;
   S.gasUrl = hardUrl;
   gasUrlEl.classList.add('ok');
