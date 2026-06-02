@@ -89,7 +89,7 @@ body{display:flex;flex-direction:column;height:100dvh}
 <div id="cfg">
   <div class="cfg-row">
     <label>GAS URL</label>
-    <input id="gas-url" class="cfg-in" type="url" placeholder="https://script.google.com/macros/s/XXXXX/exec" value="https://script.google.com/a/macros/foodservice.com.gt/s/AKfycbxNql688rJuzc046uRSuMUE0y6onuy0jOwc5lMDHQaZJW2dBpD5Mw9QfHniOso-_GKnrA/exec">
+    <input id="gas-url" class="cfg-in" type="url" placeholder="https://script.google.com/macros/s/XXXXX/exec" value="https://script.google.com/a/macros/foodservice.com.gt/s/AKfycbzXlJlOljinpR0tjIgNU7IXbb8qOJ7LDxLD8JsGh9Q7Y-xQTlJbC586TvK2RCdhl-MW/exec">
     <span id="gas-status">—</span>
   </div>
   <div class="cfg-row">
@@ -357,34 +357,46 @@ async function sendToGAS(dets) {
   dot.classList.add('sync');
 
   try {
-    // GET request via script tag — bypasses CORS completamente
-    // GAS responde a doGet con los mismos datos
-    const params = new URLSearchParams();
+    // PASO 1: Enviar datos (sin foto) via JSONP GET
+    const dataParams = new URLSearchParams();
+    const fotoB64 = payload.foto || null;
     Object.keys(payload).forEach(k => {
-      if (k !== 'foto') params.append(k, payload[k]);
+      if (k !== 'foto') dataParams.append(k, payload[k]);
     });
-    // foto por separado comprimida
-    if (payload.foto) params.append('foto', payload.foto);
 
-    await new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      const cbName = 'cb_' + Date.now();
+    const row = await new Promise((resolve) => {
+      const script  = document.createElement('script');
+      const cbName  = 'vcb_' + Date.now();
       window[cbName] = (data) => {
         delete window[cbName];
-        document.head.removeChild(script);
-        if (data && data.ok) {
-          gasSt.textContent = '✓ Fila ' + data.row;
-          gasUrlEl.classList.remove('err'); gasUrlEl.classList.add('ok');
-          showToast('✓ REGISTRADO EN SHEETS', 'synced');
-        }
+        if (script.parentNode) script.parentNode.removeChild(script);
         resolve(data);
       };
-      params.append('callback', cbName);
-      script.src = S.gasUrl + '?' + params.toString();
-      script.onerror = () => { reject(new Error('Script load error')); };
-      setTimeout(() => resolve(null), 8000); // timeout
+      dataParams.append('callback', cbName);
+      script.src = S.gasUrl + '?' + dataParams.toString();
+      script.onerror = () => resolve(null);
+      setTimeout(() => resolve(null), 10000);
       document.head.appendChild(script);
     });
+
+    if (row && row.ok) {
+      gasSt.textContent = '✓ Fila ' + row.row;
+      gasUrlEl.classList.remove('err'); gasUrlEl.classList.add('ok');
+      showToast('✓ REGISTRADO EN SHEETS', 'synced');
+
+      // PASO 2: Enviar foto por separado via no-cors POST (no necesita respuesta)
+      if (fotoB64 && S.gasUrl) {
+        fetch(S.gasUrl, {
+          method : 'POST',
+          mode   : 'no-cors',
+          body   : JSON.stringify({ action:'foto', row: row.row, foto: fotoB64, timestamp: payload.timestamp }),
+          headers: {'Content-Type':'text/plain'},
+        }).catch(() => {});
+      }
+    } else {
+      gasSt.textContent = '✗ Sin respuesta';
+      gasUrlEl.classList.add('err');
+    }
   } catch(e) {
     gasSt.textContent = '✗ Sin conexión';
     gasUrlEl.classList.add('err');
@@ -526,7 +538,7 @@ loadCfg();
 
 // Si no hay config guardada, pre-cargar URL hardcoded
 if (!S.gasUrl) {
-  const hardUrl = 'https://script.google.com/a/macros/foodservice.com.gt/s/AKfycbxNql688rJuzc046uRSuMUE0y6onuy0jOwc5lMDHQaZJW2dBpD5Mw9QfHniOso-_GKnrA/exec';
+  const hardUrl = 'https://script.google.com/a/macros/foodservice.com.gt/s/AKfycbzXlJlOljinpR0tjIgNU7IXbb8qOJ7LDxLD8JsGh9Q7Y-xQTlJbC586TvK2RCdhl-MW/exec';
   gasUrlEl.value = hardUrl;
   S.gasUrl = hardUrl;
   gasUrlEl.classList.add('ok');
