@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>PlastiScan Azul + GAS</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@400;700;900&display=swap');
+:root{
+  --bg:#080c10;--panel:#0e1318;--border:#1a2535;
+  --blue:#00aaff;--danger:#ff3030;--ok:#00e87a;
+  --warn:#ffaa00;--dim:#3a5060;--text:#b0c8d8;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Exo 2',sans-serif;touch-action:manipulation}
+
+header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0}
+.logo{font-family:'Share Tech Mono',monospace;font-size:.95rem;letter-spacing:3px;color:var(--blue)}
+.logo b{color:#fff}
+.status{display:flex;align-items:center;gap:6px;font-size:.6rem;font-weight:700;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok);animation:blink 1.2s infinite}
+.dot.sync{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* CONFIG PANEL */
+#cfg{background:var(--panel);border-bottom:1px solid var(--border);padding:8px 14px;flex-shrink:0;display:flex;flex-direction:column;gap:6px}
+.cfg-row{display:flex;align-items:center;gap:8px}
+.cfg-row label{font-size:.6rem;color:var(--dim);letter-spacing:1px;white-space:nowrap;min-width:70px}
+.cfg-in{flex:1;background:#0a1018;border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.72rem;padding:4px 8px}
+.cfg-in:focus{outline:none;border-color:var(--blue)}
+.cfg-in.ok{border-color:var(--ok)}
+.cfg-in.err{border-color:var(--danger)}
+#gas-status{font-size:.6rem;color:var(--dim);font-family:'Share Tech Mono',monospace;margin-left:4px;white-space:nowrap}
+
+#wrap{position:relative;flex:1;background:#000;overflow:hidden}
+#video{width:100%;height:100%;object-fit:cover;display:block}
+#canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.sl{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,170,255,.04) 0,rgba(0,170,255,.04) 1px,transparent 1px,transparent 4px);z-index:2}
+.roi{position:absolute;inset:0;z-index:3;pointer-events:none}
+.c{position:absolute;width:24px;height:24px}
+.c::before,.c::after{content:'';position:absolute;background:var(--blue)}
+.c::before{width:2px;height:100%}.c::after{width:100%;height:2px}
+.c.tl{top:12%;left:5%}.c.tr{top:12%;right:5%;transform:scaleX(-1)}
+.c.bl{bottom:12%;left:5%;transform:scaleY(-1)}.c.br{bottom:12%;right:5%;transform:scale(-1)}
+#roi-lbl{position:absolute;top:calc(12% - 20px);left:5%;font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--blue);letter-spacing:2px;opacity:.7}
+.sbar{position:absolute;left:5%;right:5%;height:2px;background:linear-gradient(90deg,transparent,var(--blue),transparent);box-shadow:0 0 10px var(--blue);opacity:0;animation:sd 1.6s linear infinite;z-index:4}
+.sbar.on{opacity:1}
+@keyframes sd{0%{top:12%}100%{top:88%}}
+#flash{position:absolute;inset:0;z-index:10;background:rgba(255,48,48,.4);display:none;pointer-events:none}
+#badge{position:absolute;top:calc(12% + 4px);right:5%;z-index:5;background:rgba(255,48,48,.9);color:#fff;font-family:'Share Tech Mono',monospace;font-size:.8rem;font-weight:700;padding:3px 10px;border-radius:4px;display:none}
+#sync-badge{position:absolute;top:calc(12% + 4px);left:5%;z-index:5;background:rgba(255,170,0,.9);color:#000;font-family:'Share Tech Mono',monospace;font-size:.65rem;font-weight:700;padding:3px 8px;border-radius:4px;display:none}
+#det-bar{position:absolute;bottom:0;left:0;right:0;z-index:6;background:linear-gradient(transparent,rgba(8,12,16,.95) 50%);padding:18px 12px 8px;display:flex;gap:8px;flex-wrap:wrap;min-height:52px;align-items:flex-end}
+.pill{background:rgba(255,48,48,.18);border:1px solid var(--danger);border-radius:5px;padding:3px 10px;font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--danger);animation:pop .2s ease;white-space:nowrap}
+@keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+
+#metrics{background:var(--panel);border-top:1px solid var(--border);display:grid;grid-template-columns:repeat(4,1fr);flex-shrink:0}
+.met{padding:7px 4px;text-align:center;border-right:1px solid var(--border)}
+.met:last-child{border-right:none}
+.mv{font-family:'Share Tech Mono',monospace;font-size:1.1rem;font-weight:900;line-height:1}
+.mv.ok{color:var(--ok)}.mv.warn{color:var(--warn)}.mv.bad{color:var(--danger)}
+.ml{font-size:.52rem;color:var(--dim);letter-spacing:1px;margin-top:3px;text-transform:uppercase}
+
+#sens-row{background:var(--panel);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:5px 14px;flex-shrink:0}
+#sens-row label{font-size:.6rem;color:var(--dim);letter-spacing:1px;white-space:nowrap}
+#sens-sl{flex:1;accent-color:var(--blue)}
+#sens-v{font-family:'Share Tech Mono',monospace;font-size:.75rem;color:var(--blue);min-width:20px;text-align:right}
+
+#controls{background:var(--panel);border-top:1px solid var(--border);display:flex;gap:10px;padding:9px 14px 11px;flex-shrink:0}
+#btn{flex:1;padding:12px;border-radius:8px;border:2px solid var(--blue);background:rgba(0,170,255,.1);color:var(--blue);font-family:'Exo 2',sans-serif;font-size:.85rem;font-weight:900;letter-spacing:2px;cursor:pointer;text-transform:uppercase}
+#btn.run{border-color:var(--danger);color:var(--danger);background:rgba(255,48,48,.1)}
+#breset{padding:12px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.68rem;cursor:pointer}
+
+#toast{position:fixed;top:54px;left:50%;transform:translateX(-50%) translateY(-16px);background:var(--danger);color:#fff;font-weight:900;font-size:.75rem;letter-spacing:1.5px;padding:8px 20px;border-radius:50px;z-index:50;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap}
+#toast.s{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.synced{background:var(--ok);color:#000}
+
+body{display:flex;flex-direction:column;height:100dvh}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">PLASTI<b>SCAN</b> <span style="color:var(--blue);font-size:.7rem">+ SHEETS</span></div>
+  <div class="status"><div class="dot" id="dot"></div><span id="stxt">INACTIVO</span></div>
+</header>
+
+<!-- CONFIG -->
+<div id="cfg">
+  <div class="cfg-row">
+    <label>GAS URL</label>
+    <input id="gas-url" class="cfg-in" type="url" placeholder="https://script.google.com/macros/s/XXXXX/exec" value="https://script.google.com/a/macros/foodservice.com.gt/s/AKfycbxMI71kteUwZu3RoHoap_QuSPfT2LqCzPa9hfvj5Pqk0OzeneXvlL3oqpZRDGCsw1HwhQ/exec">
+    <span id="gas-status">—</span>
+  </div>
+  <div class="cfg-row">
+    <label>LÍNEA</label>
+    <input id="cfg-linea" class="cfg-in" type="text" placeholder="VEGETALES / FRIJOL / etc." style="flex:.6">
+    <label style="min-width:50px">TURNO</label>
+    <input id="cfg-turno" class="cfg-in" type="text" placeholder="1 / 2 / 3" style="flex:.2">
+    <label style="min-width:60px">OPERADOR</label>
+    <input id="cfg-oper" class="cfg-in" type="text" placeholder="Nombre" style="flex:.5">
+  </div>
+  <div class="cfg-row">
+    <label>BANDA (mm)</label>
+    <input id="cal-in" class="cfg-in" type="number" value="200" min="50" max="600" style="flex:.3">
+    <label style="min-width:70px">FOTO EN LOG</label>
+    <input id="cfg-foto" type="checkbox" checked style="width:18px;height:18px;accent-color:var(--blue)">
+    <span style="font-size:.6rem;color:var(--dim);margin-left:4px">Captura frame al detectar</span>
+  </div>
+</div>
+
+<div id="wrap">
+  <video id="video" playsinline muted autoplay></video>
+  <canvas id="canvas"></canvas>
+  <div class="sl"></div>
+  <div class="roi">
+    <div id="roi-lbl">ZONA DE ANÁLISIS</div>
+    <div class="c tl"></div><div class="c tr"></div>
+    <div class="c bl"></div><div class="c br"></div>
+    <div class="sbar" id="sbar"></div>
+  </div>
+  <div id="flash"></div>
+  <div id="badge"></div>
+  <div id="sync-badge">↑ SYNC</div>
+  <div id="det-bar"></div>
+</div>
+
+<div id="metrics">
+  <div class="met"><div class="mv ok" id="m-fps">—</div><div class="ml">FPS</div></div>
+  <div class="met"><div class="mv ok" id="m-tot">0</div><div class="ml">TOTAL</div></div>
+  <div class="met"><div class="mv ok" id="m-frm">0</div><div class="ml">FRAME</div></div>
+  <div class="met"><div class="mv ok" id="m-max">—</div><div class="ml">MAX mm</div></div>
+</div>
+
+<div id="sens-row">
+  <label>SENSIBILIDAD</label>
+  <input type="range" id="sens-sl" min="1" max="10" value="5">
+  <span id="sens-v">5</span>
+</div>
+
+<div id="controls">
+  <button id="btn">▶ INICIAR</button>
+  <button id="breset">RESET</button>
+</div>
+
+<div id="toast">⚠ PLÁSTICO AZUL</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────
+const S = {
+  running:false, stream:null, animId:null,
+  total:0, maxMM:0, fps:0, lastTs:0,
+  sens:5, bandwidth:200, toastT:null, fc:0,
+  gasUrl:'', syncing:false, pendingQueue:[],
+  // Debounce: no enviar a GAS más de 1 vez cada N ms
+  GAS_DEBOUNCE: 8000,
+  lastSent: 0,
+  // Acumulador entre envíos
+  accum: { count:0, maxMM:0, minMM:999, sumMM:0, frames:0 },
+};
+
+// ── REFS ───────────────────────────────────────────────────────
+const video    = document.getElementById('video');
+const canvas   = document.getElementById('canvas');
+const ctx      = canvas.getContext('2d',{willReadFrequently:true});
+const btn      = document.getElementById('btn');
+const breset   = document.getElementById('breset');
+const dot      = document.getElementById('dot');
+const stxt     = document.getElementById('stxt');
+const sbar     = document.getElementById('sbar');
+const flash    = document.getElementById('flash');
+const badge    = document.getElementById('badge');
+const syncBadge= document.getElementById('sync-badge');
+const detBar   = document.getElementById('det-bar');
+const toast    = document.getElementById('toast');
+const sensEl   = document.getElementById('sens-sl');
+const sensV    = document.getElementById('sens-v');
+const calIn    = document.getElementById('cal-in');
+const gasUrlEl = document.getElementById('gas-url');
+const gasSt    = document.getElementById('gas-status');
+const cfgLinea = document.getElementById('cfg-linea');
+const cfgTurno = document.getElementById('cfg-turno');
+const cfgOper  = document.getElementById('cfg-oper');
+const cfgFoto  = document.getElementById('cfg-foto');
+const mFps     = document.getElementById('m-fps');
+const mTot     = document.getElementById('m-tot');
+const mFrm     = document.getElementById('m-frm');
+const mMax     = document.getElementById('m-max');
+
+// Persistir config en localStorage
+function loadCfg() {
+  const c = JSON.parse(localStorage.getItem('ps_cfg')||'{}');
+  if(c.url)    gasUrlEl.value = c.url;
+  if(c.linea)  cfgLinea.value = c.linea;
+  if(c.turno)  cfgTurno.value = c.turno;
+  if(c.oper)   cfgOper.value  = c.oper;
+  if(c.bw)     calIn.value    = c.bw;
+  if(c.sens)   { sensEl.value = c.sens; sensV.textContent = c.sens; }
+  S.gasUrl   = gasUrlEl.value;
+  S.bandwidth= +calIn.value||200;
+  S.sens     = +sensEl.value;
+  if(S.gasUrl) { gasUrlEl.classList.add('ok'); gasSt.textContent='OK'; }
+}
+function saveCfg() {
+  localStorage.setItem('ps_cfg', JSON.stringify({
+    url: gasUrlEl.value, linea: cfgLinea.value,
+    turno: cfgTurno.value, oper: cfgOper.value,
+    bw: calIn.value, sens: sensEl.value
+  }));
+}
+[gasUrlEl,cfgLinea,cfgTurno,cfgOper,calIn].forEach(el=>el.addEventListener('change',()=>{
+  S.gasUrl   = gasUrlEl.value.trim();
+  S.bandwidth= +calIn.value||200;
+  if(S.gasUrl){ gasUrlEl.classList.add('ok'); gasSt.textContent='Guardado'; }
+  saveCfg();
+}));
+sensEl.oninput = () => { S.sens=+sensEl.value; sensV.textContent=S.sens; saveCfg(); };
+
+// ── CÁMARA ─────────────────────────────────────────────────────
+async function startCam() {
+  try {
+    S.stream = await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}}
+    });
+    video.srcObject = S.stream;
+    await video.play();
+    canvas.width  = video.videoWidth  || 640;
+    canvas.height = video.videoHeight || 480;
+    return true;
+  } catch(e) { alert('Sin acceso a cámara: '+e.message); return false; }
+}
+function stopCam() { S.stream?.getTracks().forEach(t=>t.stop()); S.stream=null; }
+
+// ── DETECCIÓN AZUL ─────────────────────────────────────────────
+function getRoi() {
+  return { x:Math.floor(canvas.width*.05), y:Math.floor(canvas.height*.12),
+           w:Math.floor(canvas.width*.90), h:Math.floor(canvas.height*.76) };
+}
+function px2mm(px) { return px * S.bandwidth / canvas.width; }
+function areaForMM(mm) {
+  const rpx = (mm/2)/(S.bandwidth/canvas.width);
+  return Math.max(2, Math.floor(Math.PI*rpx*rpx));
+}
+
+function analyze() {
+  const roi = getRoi();
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const id   = ctx.getImageData(roi.x, roi.y, roi.w, roi.h);
+  const data = id.data;
+
+  const bAdvR = 85-(S.sens*7);
+  const bAdvG = 30-(S.sens*2);
+  const bMin  = 60;
+  const bin   = new Uint8Array(roi.w*roi.h);
+
+  for (let i=0; i<roi.w*roi.h; i++) {
+    const r=data[i*4], g=data[i*4+1], b=data[i*4+2];
+    if (b>bMin && b>r+bAdvR && b>g+bAdvG) bin[i]=1;
+  }
+
+  const blobs = connectedBlobs(bin, roi.w, roi.h);
+  const minPx = areaForMM(0.5), maxPx = areaForMM(6.0);
+  const valid = blobs.filter(b=>b.size>=minPx && b.size<=maxPx*4);
+
+  drawDetections(valid, roi);
+  return valid;
+}
+
+function connectedBlobs(map, w, h) {
+  const vis=new Uint8Array(w*h), blobs=[];
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++) {
+    const i=y*w+x;
+    if(!map[i]||vis[i]) continue;
+    const q=[i]; vis[i]=1;
+    let sz=0,sx=0,sy=0;
+    while(q.length) {
+      const cur=q.pop(); sz++;
+      const cx=cur%w, cy=(cur/w)|0; sx+=cx; sy+=cy;
+      for(const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]]) {
+        const nx=cx+dx, ny=cy+dy;
+        if(nx>=0&&nx<w&&ny>=0&&ny<h){const ni=ny*w+nx;if(map[ni]&&!vis[ni]){vis[ni]=1;q.push(ni);}}
+      }
+    }
+    blobs.push({size:sz, cx:sx/sz, cy:sy/sz});
+  }
+  return blobs;
+}
+
+function drawDetections(blobs, roi) {
+  ctx.save(); ctx.translate(roi.x, roi.y);
+  for(const b of blobs) {
+    const r=Math.sqrt(b.size/Math.PI);
+    const sizeMM=px2mm(r*2).toFixed(2);
+    ctx.beginPath(); ctx.arc(b.cx,b.cy,Math.max(r+5,10),0,Math.PI*2);
+    ctx.strokeStyle='#ff3030'; ctx.lineWidth=2.5; ctx.stroke();
+    ctx.fillStyle='rgba(255,48,48,0.15)'; ctx.fill();
+    const rr=Math.max(r+5,10);
+    ctx.beginPath();
+    ctx.moveTo(b.cx-rr-4,b.cy); ctx.lineTo(b.cx+rr+4,b.cy);
+    ctx.moveTo(b.cx,b.cy-rr-4); ctx.lineTo(b.cx,b.cy+rr+4);
+    ctx.strokeStyle='rgba(255,80,80,.55)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillStyle='rgba(255,48,48,.92)';
+    ctx.fillRect(b.cx+rr+5,b.cy-11,46,20);
+    ctx.fillStyle='#fff'; ctx.font='bold 11px Share Tech Mono,monospace';
+    ctx.fillText(sizeMM+'mm', b.cx+rr+8, b.cy+4);
+  }
+  ctx.restore();
+  ctx.strokeStyle=blobs.length?'rgba(255,48,48,.9)':'rgba(0,170,255,.5)';
+  ctx.lineWidth=1.5;
+  ctx.strokeRect(roi.x, roi.y, roi.w, roi.h);
+}
+
+// ── GAS LOGGER ─────────────────────────────────────────────────
+function captureJpeg(quality=0.5) {
+  // Canvas ya tiene el frame con las marcas
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+async function sendToGAS(dets) {
+  if (!S.gasUrl) return;
+  const now = Date.now();
+
+  // Acumular en buffer
+  dets.forEach(d => {
+    const mm = px2mm(Math.sqrt(d.size/Math.PI)*2);
+    S.accum.count++;
+    S.accum.sumMM += mm;
+    if(mm > S.accum.maxMM) S.accum.maxMM = mm;
+    if(mm < S.accum.minMM) S.accum.minMM = mm;
+  });
+  S.accum.frames++;
+
+  // Enviar solo cada GAS_DEBOUNCE ms para no saturar
+  if (now - S.lastSent < S.GAS_DEBOUNCE || S.syncing) return;
+  S.lastSent = now;
+  S.syncing  = true;
+
+  const snap = {...S.accum};
+  S.accum = {count:0,maxMM:0,minMM:999,sumMM:0,frames:0}; // reset
+
+  const payload = {
+    timestamp : new Date().toISOString(),
+    linea     : cfgLinea.value || 'Sin definir',
+    turno     : cfgTurno.value || '—',
+    operador  : cfgOper.value  || '—',
+    count     : snap.count,
+    maxMM     : +snap.maxMM.toFixed(2),
+    minMM     : snap.minMM===999 ? 0 : +snap.minMM.toFixed(2),
+    avgMM     : snap.count ? +(snap.sumMM/snap.count).toFixed(2) : 0,
+    fps       : S.fps,
+    bandwidth : S.bandwidth,
+    foto      : cfgFoto.checked ? captureJpeg(0.45) : null,
+  };
+
+  // Mostrar badge sync
+  syncBadge.style.display='block';
+  dot.classList.add('sync');
+
+  try {
+    const res  = await fetch(S.gasUrl, {
+      method : 'POST',
+      body   : JSON.stringify(payload),
+      headers: {'Content-Type':'application/json'},
+    });
+    const data = await res.json();
+    if(data.ok) {
+      gasSt.textContent = '✓ Fila '+data.row;
+      gasUrlEl.classList.remove('err'); gasUrlEl.classList.add('ok');
+      showToast('✓ REGISTRADO EN SHEETS', 'synced');
+    } else {
+      gasSt.textContent = '✗ '+data.error;
+    }
+  } catch(e) {
+    gasSt.textContent = '✗ Sin conexión';
+    gasUrlEl.classList.add('err');
+    // Re-encolar para intentar después
+    S.pendingQueue.push(payload);
+  } finally {
+    S.syncing = false;
+    syncBadge.style.display='none';
+    dot.classList.remove('sync');
+    if(S.running) dot.classList.add('on');
+  }
+
+  // Reintentar pendientes
+  flushQueue();
+}
+
+async function flushQueue() {
+  while(S.pendingQueue.length && S.gasUrl && !S.syncing) {
+    const p = S.pendingQueue.shift();
+    try {
+      await fetch(S.gasUrl,{method:'POST',body:JSON.stringify(p),headers:{'Content-Type':'application/json'}});
+    } catch(e) { S.pendingQueue.unshift(p); break; }
+  }
+}
+
+// ── LOOP ───────────────────────────────────────────────────────
+function loop(ts) {
+  if(!S.running) return;
+  if(S.lastTs) S.fps=Math.round(1000/(ts-S.lastTs));
+  S.lastTs=ts; S.fc++;
+
+  if(video.videoWidth && canvas.width!==video.videoWidth) {
+    canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+  }
+
+  let dets=[];
+  try{ dets=analyze(); } catch(e){}
+
+  if(S.fc%3===0) {
+    mFps.textContent=S.fps; mFrm.textContent=dets.length;
+    mTot.textContent=S.total;
+    mMax.textContent=S.maxMM>0?S.maxMM.toFixed(1):'—';
+    mFrm.className='mv '+(dets.length===0?'ok':'bad');
+    mTot.className='mv '+(S.total===0?'ok':S.total<5?'warn':'bad');
+    mMax.className='mv '+(S.maxMM===0?'ok':S.maxMM<2?'warn':'bad');
+  }
+
+  if(dets.length>0) {
+    S.total+=dets.length;
+    dets.forEach(d=>{ const mm=px2mm(Math.sqrt(d.size/Math.PI)*2); if(mm>S.maxMM) S.maxMM=mm; });
+    doAlert(dets);
+    sendToGAS(dets); // async, no bloquea el loop
+  }
+
+  S.animId=requestAnimationFrame(loop);
+}
+
+function showToast(msg, cls='') {
+  if(S.toastT) clearTimeout(S.toastT);
+  toast.textContent=msg; toast.className='s '+(cls||'');
+  S.toastT=setTimeout(()=>toast.className='', cls?2500:1800);
+}
+
+function doAlert(dets) {
+  flash.style.cssText='display:block;animation:none;position:absolute;inset:0;z-index:10;background:rgba(255,48,48,.35);pointer-events:none';
+  void flash.offsetWidth; flash.style.animation='flash .3s ease forwards';
+  setTimeout(()=>flash.style.display='none',340);
+
+  badge.style.display='block'; badge.textContent=dets.length;
+  clearTimeout(S._bt); S._bt=setTimeout(()=>badge.style.display='none',2000);
+
+  const mm=px2mm(Math.sqrt(dets[0].size/Math.PI)*2).toFixed(1);
+  showToast(`⚠ PLÁSTICO — ${dets.length} pieza${dets.length>1?'s':''} (~${mm}mm)`);
+
+  if(detBar.children.length>6) detBar.innerHTML='';
+  dets.slice(0,3).forEach(d=>{
+    const mm2=px2mm(Math.sqrt(d.size/Math.PI)*2).toFixed(2);
+    const p=document.createElement('div'); p.className='pill'; p.textContent=`▲ ${mm2}mm`;
+    detBar.appendChild(p); setTimeout(()=>p.remove(),3500);
+  });
+}
+
+// ── CONTROLES ──────────────────────────────────────────────────
+btn.onclick=async()=>{
+  if(!S.running){
+    const ok=await startCam(); if(!ok) return;
+    S.running=true; S.fc=0; S.lastTs=0;
+    btn.textContent='■ DETENER'; btn.classList.add('run');
+    dot.classList.add('on'); stxt.textContent='ANALIZANDO';
+    sbar.classList.add('on');
+    S.animId=requestAnimationFrame(loop);
+    try{ await navigator.wakeLock.request('screen'); }catch(e){}
+  } else {
+    S.running=false; cancelAnimationFrame(S.animId); stopCam();
+    btn.textContent='▶ INICIAR'; btn.classList.remove('run');
+    dot.classList.remove('on'); stxt.textContent='INACTIVO';
+    sbar.classList.remove('on');
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+};
+
+breset.onclick=()=>{
+  S.total=0; S.maxMM=0;
+  ['m-tot','m-max','m-frm'].forEach(id=>document.getElementById(id).className='mv ok');
+  mTot.textContent='0'; mMax.textContent='—'; mFrm.textContent='0';
+  detBar.innerHTML='';
+};
+
+// Cargar config guardada
+loadCfg();
+
+// Si no hay config guardada, pre-cargar URL hardcoded
+if (!S.gasUrl) {
+  const hardUrl = 'https://script.google.com/a/macros/foodservice.com.gt/s/AKfycbxMI71kteUwZu3RoHoap_QuSPfT2LqCzPa9hfvj5Pqk0OzeneXvlL3oqpZRDGCsw1HwhQ/exec';
+  gasUrlEl.value = hardUrl;
+  S.gasUrl = hardUrl;
+  gasUrlEl.classList.add('ok');
+  gasSt.textContent = 'OK';
+}
+</script>
+</body>
+</html>
