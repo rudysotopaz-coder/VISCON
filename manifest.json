@@ -1,0 +1,17 @@
+{
+  "name": "VISCON — Visual Contamination Monitor",
+  "short_name": "VISCON",
+  "description": "Detección de contaminantes plásticos en banda transportadora",
+  "start_url": "/VISCON/VISCON.html",
+  "display": "standalone",
+  "background_color": "#080c10",
+  "theme_color": "#080c10",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%23080c10'/><text x='50%' y='55%' font-size='120' text-anchor='middle' dominant-baseline='middle' fill='%2300aaff'>👁</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
