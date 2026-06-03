@@ -76,33 +76,51 @@ input:checked+.slider::before{transform:translateX(18px)}
   background:repeating-linear-gradient(0deg,rgba(180,0,255,.06) 0,rgba(180,0,255,.06) 1px,transparent 1px,transparent 3px)}
 .uv-overlay.on{opacity:1}
 
-/* ALARM OVERLAY — cubre toda la pantalla */
+/* ALARM — borde pulsante + barra inferior, NO tapa la cámara */
 #alarm-overlay{
   position:absolute;inset:0;z-index:20;
-  display:none;flex-direction:column;
-  align-items:center;justify-content:center;
-  background:rgba(0,0,0,.85);
-  backdrop-filter:blur(4px);
-  gap:20px;
+  display:none;pointer-events:none;
+  /* borde rojo pulsante alrededor de toda la cámara */
+  box-shadow:inset 0 0 0 4px var(--danger);
+  animation:borderPulse .5s ease infinite alternate;
 }
-#alarm-overlay.show{display:flex;animation:alarmpulse .5s ease infinite alternate}
-@keyframes alarmpulse{0%{background:rgba(180,0,0,.7)}100%{background:rgba(0,0,0,.85)}}
-.alarm-icon{font-size:4rem;animation:shake .3s infinite}
+#alarm-overlay.show{display:block;}
+@keyframes borderPulse{
+  0%{box-shadow:inset 0 0 0 4px rgba(255,48,48,1),inset 0 0 40px rgba(255,48,48,.3);}
+  100%{box-shadow:inset 0 0 0 6px rgba(255,48,48,.4),inset 0 0 10px rgba(255,48,48,.1);}
+}
+/* barra de alarma en la parte INFERIOR de la cámara */
+#alarm-bar{
+  position:absolute;
+  bottom:0;left:0;right:0;
+  z-index:21;
+  pointer-events:auto;
+  background:linear-gradient(transparent, rgba(180,0,0,.92) 40%);
+  padding:20px 14px 12px;
+  display:none;
+  flex-direction:column;
+  gap:8px;
+}
+#alarm-bar.show{display:flex;}
+.alarm-top{display:flex;align-items:center;gap:10px;}
+.alarm-icon{font-size:1.4rem;animation:shake .3s infinite;flex-shrink:0}
 @keyframes shake{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg)}}
-.alarm-title{font-family:'Share Tech Mono',monospace;font-size:1.6rem;color:#fff;letter-spacing:4px;text-align:center;text-shadow:0 0 20px var(--danger)}
-.alarm-sub{font-size:.85rem;color:rgba(255,255,255,.7);letter-spacing:2px;text-align:center}
+.alarm-texts{flex:1;}
+.alarm-title{font-family:'Share Tech Mono',monospace;font-size:.85rem;color:#fff;letter-spacing:3px;text-shadow:0 0 10px var(--danger)}
+.alarm-sub{font-size:.7rem;color:rgba(255,255,255,.8);letter-spacing:1px;margin-top:2px}
+.alarm-count{font-size:.6rem;color:rgba(255,255,255,.5);font-family:'Share Tech Mono',monospace;letter-spacing:1px}
 #btn-ack{
-  padding:16px 40px;border-radius:50px;
-  border:3px solid #fff;background:var(--danger);
+  width:100%;padding:12px;border-radius:8px;
+  border:2px solid #fff;background:var(--danger);
   color:#fff;font-family:'Exo 2',sans-serif;
-  font-size:1rem;font-weight:900;letter-spacing:3px;
+  font-size:.85rem;font-weight:900;letter-spacing:2px;
   cursor:pointer;text-transform:uppercase;
-  box-shadow:0 0 30px rgba(255,48,48,.6);
+  box-shadow:0 0 20px rgba(255,48,48,.6);
   animation:btnpulse 1s infinite;
+  pointer-events:auto;
 }
-@keyframes btnpulse{0%,100%{box-shadow:0 0 20px rgba(255,48,48,.4)}50%{box-shadow:0 0 40px rgba(255,48,48,.9)}}
-#btn-ack:active{transform:scale(.96)}
-.alarm-count{font-family:'Share Tech Mono',monospace;font-size:.8rem;color:rgba(255,255,255,.5);letter-spacing:2px}
+@keyframes btnpulse{0%,100%{box-shadow:0 0 10px rgba(255,48,48,.4)}50%{box-shadow:0 0 25px rgba(255,48,48,.9)}}
+#btn-ack:active{transform:scale(.98)}
 
 #flash{position:absolute;inset:0;z-index:10;background:rgba(255,48,48,.4);display:none;pointer-events:none}
 #badge{position:absolute;top:calc(12% + 4px);right:5%;z-index:5;background:rgba(255,48,48,.9);color:#fff;font-family:'Share Tech Mono',monospace;font-size:.8rem;font-weight:700;padding:3px 10px;border-radius:4px;display:none}
@@ -196,13 +214,18 @@ input:checked+.slider::before{transform:translateX(18px)}
   <div id="sync-badge">↑ SYNC</div>
   <div id="det-bar"></div>
 
-  <!-- ALARM OVERLAY — no desaparece hasta ACK -->
-  <div id="alarm-overlay">
-    <div class="alarm-icon">⚠️</div>
-    <div class="alarm-title">PLÁSTICO DETECTADO</div>
-    <div class="alarm-sub" id="alarm-sub">Detener banda e inspeccionar</div>
+  <!-- ALARM — borde pulsante + barra inferior -->
+  <div id="alarm-overlay"></div>
+  <div id="alarm-bar">
+    <div class="alarm-top">
+      <div class="alarm-icon">⚠️</div>
+      <div class="alarm-texts">
+        <div class="alarm-title">⚠ PLÁSTICO DETECTADO</div>
+        <div class="alarm-sub" id="alarm-sub">Detener banda e inspeccionar</div>
+        <div class="alarm-count" id="alarm-count"></div>
+      </div>
+    </div>
     <button id="btn-ack">✓ CONFIRMAR REVISIÓN</button>
-    <div class="alarm-count" id="alarm-count"></div>
   </div>
 </div>
 
@@ -266,7 +289,7 @@ const sensV       = document.getElementById('sens-v');
 const uvToggle    = document.getElementById('uv-toggle');
 const uvBadge     = document.getElementById('uv-badge');
 const uvOverlay   = document.getElementById('uv-overlay');
-const alarmOvl    = document.getElementById('alarm-overlay');
+const alarmOvl    = document.getElementById('alarm-bar');
 const btnAck      = document.getElementById('btn-ack');
 const alarmSub    = document.getElementById('alarm-sub');
 const alarmCount  = document.getElementById('alarm-count');
@@ -314,6 +337,8 @@ btnAck.onclick=()=>{
   S.alarmActive=false;
   S.alarmBeeping=false;
   alarmOvl.classList.remove('show');
+  document.getElementById('alarm-overlay').classList.remove('show');
+  document.getElementById('alarm-bar').classList.remove('show');
   dot.classList.remove('alarm');
   if(S.running){dot.classList.add('on');stxt.textContent='ANALIZANDO';}
   stopBeep();
@@ -553,11 +578,13 @@ function triggerAlarm(dets){
     alarmSub.textContent=`${S.uvMode?'[UV] ':''}${dets.length} partícula${dets.length>1?'s':''} — ~${mm}mm — Detener banda`;
     alarmCount.textContent=`Total sesión: ${S.total}`;
     alarmOvl.classList.add('show');
+    document.getElementById('alarm-overlay').classList.add('show');
+    document.getElementById('alarm-bar').classList.add('show');
     dot.classList.remove('on');dot.classList.add('alarm');
     stxt.textContent='⚠ ALARMA';
     startBeep();
   } else {
-    // Actualizar contador mientras sigue activa
+    // Actualizar mientras sigue activa
     alarmSub.textContent=`${dets.length} partícula${dets.length>1?'s':''} — ~${mm}mm`;
     alarmCount.textContent=`Total sesión: ${S.total}`;
   }
@@ -607,6 +634,8 @@ btn.onclick=async()=>{
   } else {
     S.running=false;cancelAnimationFrame(S.animId);stopCam();stopBeep();
     S.alarmActive=false;alarmOvl.classList.remove('show');
+  document.getElementById('alarm-overlay').classList.remove('show');
+    document.getElementById('alarm-bar').classList.remove('show');
     btn.textContent='▶ INICIAR';btn.classList.remove('run');
     dot.classList.remove('on');dot.classList.remove('alarm');stxt.textContent='INACTIVO';
     sbar.classList.remove('on');ctx.clearRect(0,0,canvas.width,canvas.height);
