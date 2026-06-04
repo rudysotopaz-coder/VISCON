@@ -61,12 +61,25 @@ input:checked+.slider::before{transform:translateX(18px)}
 #canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .sl{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,170,255,.03) 0,rgba(0,170,255,.03) 1px,transparent 1px,transparent 4px);z-index:2}
 .roi{position:absolute;inset:0;z-index:3;pointer-events:none}
-.c{position:absolute;width:22px;height:22px}
-.c::before,.c::after{content:'';position:absolute;background:var(--blue)}
-.c::before{width:2px;height:100%}.c::after{width:100%;height:2px}
-.c.tl{top:12%;left:5%}.c.tr{top:12%;right:5%;transform:scaleX(-1)}
-.c.bl{bottom:12%;left:5%;transform:scaleY(-1)}.c.br{bottom:12%;right:5%;transform:scale(-1)}
-#roi-lbl{position:absolute;top:calc(12% - 18px);left:5%;font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--blue);letter-spacing:2px;opacity:.7}
+/* ROI ajustable */
+#roi-box{
+  position:absolute;z-index:8;
+  border:2px solid var(--blue);
+  box-sizing:border-box;
+  touch-action:none;
+}
+#roi-box.alarm{border-color:var(--danger);box-shadow:0 0 0 2px rgba(255,48,48,.3)}
+#roi-lbl{position:absolute;top:-18px;left:0;font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--blue);letter-spacing:2px;opacity:.7;white-space:nowrap}
+.roi-corner{
+  position:absolute;width:28px;height:28px;
+  background:rgba(0,170,255,.25);border:2px solid var(--blue);
+  border-radius:4px;cursor:nwse-resize;touch-action:none;
+}
+.roi-corner.tl{top:-14px;left:-14px;cursor:nw-resize}
+.roi-corner.tr{top:-14px;right:-14px;cursor:ne-resize}
+.roi-corner.bl{bottom:-14px;left:-14px;cursor:sw-resize}
+.roi-corner.br{bottom:-14px;right:-14px;cursor:se-resize}
+#roi-move{position:absolute;inset:14px;cursor:move;touch-action:none}
 .sbar{position:absolute;left:5%;right:5%;height:2px;background:linear-gradient(90deg,transparent,var(--blue),transparent);box-shadow:0 0 10px var(--blue);opacity:0;animation:sd 1.6s linear infinite;z-index:4}
 .sbar.on{opacity:1}
 @keyframes sd{0%{top:12%}100%{top:88%}}
@@ -203,12 +216,15 @@ input:checked+.slider::before{transform:translateX(18px)}
   <canvas id="canvas"></canvas>
   <div class="sl"></div>
   <div class="uv-overlay" id="uv-overlay"></div>
-  <div class="roi">
-    <div id="roi-lbl">ZONA DE ANÁLISIS</div>
-    <div class="c tl"></div><div class="c tr"></div>
-    <div class="c bl"></div><div class="c br"></div>
-    <div class="sbar" id="sbar"></div>
+  <div id="roi-box">
+    <div id="roi-lbl">ZONA ✥ arrastrar esquinas</div>
+    <div class="roi-corner tl" id="rc-tl"></div>
+    <div class="roi-corner tr" id="rc-tr"></div>
+    <div class="roi-corner bl" id="rc-bl"></div>
+    <div class="roi-corner br" id="rc-br"></div>
+    <div id="roi-move"></div>
   </div>
+  <div class="sbar" id="sbar"></div>
   <div id="flash"></div>
   <div id="badge"></div>
   <div id="sync-badge">↑ SYNC</div>
@@ -387,8 +403,12 @@ function stopBeep(){
 
 // ── DETECTION ──────────────────────────────────────────────────
 function getRoi(){
-  return{x:Math.floor(canvas.width*.05),y:Math.floor(canvas.height*.12),
-         w:Math.floor(canvas.width*.90),h:Math.floor(canvas.height*.76)};
+  return{
+    x:Math.floor(canvas.width  * roiState.x),
+    y:Math.floor(canvas.height * roiState.y),
+    w:Math.floor(canvas.width  * roiState.w),
+    h:Math.floor(canvas.height * roiState.h),
+  };
 }
 function px2mm(px){return px*S.bandwidth/canvas.width;}
 function areaForMM(mm){const r=(mm/2)/(S.bandwidth/canvas.width);return Math.max(2,Math.floor(Math.PI*r*r));}
@@ -579,6 +599,7 @@ function triggerAlarm(dets){
     alarmCount.textContent=`Total sesión: ${S.total}`;
     alarmOvl.classList.add('show');
     document.getElementById('alarm-overlay').classList.add('show');
+    roiBox.classList.add('alarm');
     document.getElementById('alarm-bar').classList.add('show');
     dot.classList.remove('on');dot.classList.add('alarm');
     stxt.textContent='⚠ ALARMA';
@@ -648,6 +669,93 @@ breset.onclick=()=>{
   mTot.textContent='0';mMax.textContent='—';mFrm.textContent='0';
   detBar.innerHTML='';
 };
+
+// ── ROI AJUSTABLE ──────────────────────────────────────────────
+const roiBox = document.getElementById('roi-box');
+const roiState = { x:0.05, y:0.12, w:0.90, h:0.76 }; // % del wrap
+
+function applyRoi() {
+  const wrap = document.getElementById('wrap');
+  const ww = wrap.offsetWidth, wh = wrap.offsetHeight;
+  roiBox.style.left   = (roiState.x * ww) + 'px';
+  roiBox.style.top    = (roiState.y * wh) + 'px';
+  roiBox.style.width  = (roiState.w * ww) + 'px';
+  roiBox.style.height = (roiState.h * wh) + 'px';
+}
+window.addEventListener('resize', applyRoi);
+setTimeout(applyRoi, 100);
+
+function getRoiPx() {
+  const wrap = document.getElementById('wrap');
+  return {
+    x: Math.floor(roiState.x * wrap.offsetWidth),
+    y: Math.floor(roiState.y * wrap.offsetHeight),
+    w: Math.floor(roiState.w * wrap.offsetWidth),
+    h: Math.floor(roiState.h * wrap.offsetHeight),
+  };
+}
+
+function makeDraggable(el, onDrag) {
+  let startX, startY;
+  function start(e) {
+    e.stopPropagation();
+    const pt = e.touches ? e.touches[0] : e;
+    startX = pt.clientX; startY = pt.clientY;
+    window.addEventListener('mousemove', move);
+    window.addEventListener('touchmove', move, {passive:false});
+    window.addEventListener('mouseup',   end);
+    window.addEventListener('touchend',  end);
+  }
+  function move(e) {
+    e.preventDefault();
+    const pt = e.touches ? e.touches[0] : e;
+    onDrag(pt.clientX - startX, pt.clientY - startY);
+    startX = pt.clientX; startY = pt.clientY;
+    applyRoi();
+  }
+  function end() {
+    window.removeEventListener('mousemove', move);
+    window.removeEventListener('touchmove', move);
+    window.removeEventListener('mouseup',   end);
+    window.removeEventListener('touchend',  end);
+  }
+  el.addEventListener('mousedown',  start);
+  el.addEventListener('touchstart', start, {passive:false});
+}
+
+// Drag esquinas
+const wrap = document.getElementById('wrap');
+makeDraggable(document.getElementById('rc-tl'), (dx,dy) => {
+  const ww=wrap.offsetWidth, wh=wrap.offsetHeight;
+  roiState.x += dx/ww; roiState.y += dy/wh;
+  roiState.w -= dx/ww; roiState.h -= dy/wh;
+  roiState.w = Math.max(0.1, roiState.w);
+  roiState.h = Math.max(0.1, roiState.h);
+});
+makeDraggable(document.getElementById('rc-tr'), (dx,dy) => {
+  const ww=wrap.offsetWidth, wh=wrap.offsetHeight;
+  roiState.y += dy/wh; roiState.w += dx/ww; roiState.h -= dy/wh;
+  roiState.w = Math.max(0.1, roiState.w);
+  roiState.h = Math.max(0.1, roiState.h);
+});
+makeDraggable(document.getElementById('rc-bl'), (dx,dy) => {
+  const ww=wrap.offsetWidth, wh=wrap.offsetHeight;
+  roiState.x += dx/ww; roiState.w -= dx/ww; roiState.h += dy/wh;
+  roiState.w = Math.max(0.1, roiState.w);
+  roiState.h = Math.max(0.1, roiState.h);
+});
+makeDraggable(document.getElementById('rc-br'), (dx,dy) => {
+  const ww=wrap.offsetWidth, wh=wrap.offsetHeight;
+  roiState.w += dx/ww; roiState.h += dy/wh;
+  roiState.w = Math.max(0.1, roiState.w);
+  roiState.h = Math.max(0.1, roiState.h);
+});
+makeDraggable(document.getElementById('roi-move'), (dx,dy) => {
+  const ww=wrap.offsetWidth, wh=wrap.offsetHeight;
+  roiState.x += dx/ww; roiState.y += dy/wh;
+  roiState.x = Math.max(0, Math.min(roiState.x, 1-roiState.w));
+  roiState.y = Math.max(0, Math.min(roiState.y, 1-roiState.h));
+});
 
 loadCfg();
 </script>
