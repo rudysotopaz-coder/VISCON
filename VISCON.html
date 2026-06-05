@@ -445,8 +445,8 @@ function analyze(){
   }
 
   const blobs=connectedBlobs(bin,roi.w,roi.h);
-  const minPx=areaForMM(0.5),maxPx=areaForMM(6.0);
-  const valid=blobs.filter(b=>b.size>=minPx&&b.size<=maxPx*4);
+  const minPx=areaForMM(0.5),maxPx=areaForMM(25.0);
+  const valid=blobs.filter(b=>b.size>=minPx&&b.size<=maxPx*20);
   const newDets=trackParticles(valid,roi);
   drawDetections(valid,roi);
   return newDets;
